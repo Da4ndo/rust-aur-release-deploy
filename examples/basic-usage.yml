@@ -1,0 +1,44 @@
+name: Basic Release and Deploy
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (e.g. v1.0.0)'
+        required: false
+      rel:
+        description: 'Release number (e.g. 1)'
+        required: false
+        default: '1'
+
+jobs:
+  release_and_deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build and Prepare Release
+        id: release
+        uses: Da4ndo/rust-aur-release-deploy@v1
+        with:
+          pkg_name: my-rust-app
+          version: ${{ github.event.inputs.version }}
+          rel: ${{ github.event.inputs.rel || '1' }}
+          build_linux: true  # Build for Linux (required for AUR)
+          linux_files: '["LICENSE", "README.md"]'  # Files to include in Linux package
+          pkgbuild: './PKGBUILD'  # Path to your PKGBUILD template
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: my-rust-app
+          pkgbuild: ${{ steps.release.outputs.pkgbuild_path }}
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to version ${{ steps.release.outputs.version }}" 

@@ -1,0 +1,347 @@
+name: 'Rust AUR Release Deploy'
+description: 'GitHub Action for building Rust applications, creating GitHub releases, and preparing PKGBUILD for AUR deployment'
+author: 'Da4ndo'
+branding:
+  icon: 'package'
+  color: 'orange'
+
+inputs:
+  version:
+    description: 'Version to deploy (e.g. v1.0.0). If not provided, uses the latest release tag.'
+    required: false
+  pkg_name:
+    description: 'Name of your package'
+    required: true
+  build_linux:
+    description: 'Whether to build for Linux'
+    required: false
+    default: true
+    type: boolean
+  build_windows:
+    description: 'Whether to build for Windows'
+    required: false
+    default: false
+    type: boolean
+  linux_files:
+    description: 'List of additional files to include in the Linux tar.gz archive (JSON array)'
+    required: false
+    default: '[]'
+  windows_files:
+    description: 'List of additional files to include in the Windows release (JSON array)'
+    required: false
+    default: '[]'
+  release_files:
+    description: 'List of additional files to include in the GitHub release but not in platform archives (JSON array)'
+    required: false
+    default: '[]'
+  rel:
+    description: 'Release number for AUR package'
+    required: false
+    default: '1'
+  prepare_aur:
+    description: 'Whether to prepare PKGBUILD for AUR deployment'
+    required: false
+    default: true
+    type: boolean
+  pkgbuild:
+    description: 'Path to the PKGBUILD file to use for AUR deployment'
+    required: false
+    default: ''
+  pkgbuild_output_path:
+    description: 'Path where the prepared PKGBUILD file should be saved'
+    required: false
+    default: './prepared_pkgbuild/PKGBUILD'
+
+outputs:
+  version:
+    description: 'The version that was deployed'
+    value: ${{ steps.get_version.outputs.version }}
+  linux_archive:
+    description: 'Path to the Linux tar.gz archive'
+    value: ${{ steps.prepare_linux.outputs.ARCHIVE_PATH }}
+  linux_sha256:
+    description: 'SHA256 sum of the Linux archive'
+    value: ${{ steps.prepare_linux.outputs.SHA256 }}
+  windows_archive:
+    description: 'Path to the Windows zip archive'
+    value: ${{ steps.prepare_windows.outputs.ARCHIVE_PATH }}
+  windows_sha256:
+    description: 'SHA256 sum of the Windows archive'
+    value: ${{ steps.prepare_windows.outputs.SHA256 }}
+  pkgbuild_path:
+    description: 'The path to the prepared PKGBUILD file'
+    value: ${{ inputs.pkgbuild_output_path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Get version
+      id: get_version
+      shell: bash
+      run: |
+        echo "🔍 Determining version..."
+        if [ -n "${{ inputs.version }}" ]; then
+          echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          echo "✅ Using provided version: ${{ inputs.version }}"
+        else
+          # Get the latest tag, handle case where no tags exist
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LATEST_TAG" ]; then
+            echo "❌ No tags found and no version provided"
+            exit 1
+          fi
+          echo "version=${LATEST_TAG}" >> $GITHUB_OUTPUT
+          echo "✅ Using latest tag: ${LATEST_TAG}"
+        fi
+
+    - name: Set up Rust
+      if: inputs.build_linux || inputs.build_windows
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+
+    - name: Build for Linux (x86_64)
+      if: inputs.build_linux
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --release --target x86_64-unknown-linux-gnu
+
+    - name: Build for Windows (x86_64)
+      if: inputs.build_windows
+      uses: actions-rs/cargo@v1
+      with:
+        command: build
+        args: --release --target x86_64-pc-windows-msvc
+
+    - name: Prepare Linux Release
+      if: inputs.build_linux
+      id: prepare_linux
+      shell: bash
+      run: |
+        echo "📦 Preparing Linux release..."
+        
+        # Create staging directory
+        STAGING_DIR="staging_linux"
+        mkdir -p "$STAGING_DIR"
+        
+        # Copy binary
+        if [ -f "target/x86_64-unknown-linux-gnu/release/${{ inputs.pkg_name }}" ]; then
+          cp "target/x86_64-unknown-linux-gnu/release/${{ inputs.pkg_name }}" "$STAGING_DIR/"
+          echo "✅ Added Linux binary"
+        else
+          echo "❌ Linux binary not found"
+          exit 1
+        fi
+        
+        # Copy additional Linux files
+        if [ -n "${{ inputs.linux_files }}" ] && [ "${{ inputs.linux_files }}" != "[]" ]; then
+          echo "📎 Adding Linux-specific files..."
+          FILES=$(echo '${{ inputs.linux_files }}' | jq -r '.[]')
+          for file in $FILES; do
+            if [ -f "$file" ]; then
+              cp "$file" "$STAGING_DIR/"
+              echo "✅ Added file: $file"
+            else
+              echo "⚠️ File not found: $file"
+            fi
+          done
+        fi
+        
+        # Create tar.gz archive
+        ARCHIVE_NAME="${{ inputs.pkg_name }}-${{ steps.get_version.outputs.version }}-linux-x86_64.tar.gz"
+        tar -czf "$ARCHIVE_NAME" -C "$STAGING_DIR" .
+        
+        # Calculate SHA256
+        SHA256=$(sha256sum "$ARCHIVE_NAME" | cut -d ' ' -f 1)
+        
+        # Set outputs
+        echo "ARCHIVE_PATH=$ARCHIVE_NAME" >> $GITHUB_OUTPUT
+        echo "SHA256=$SHA256" >> $GITHUB_OUTPUT
+        
+        # Move to release assets directory
+        mkdir -p release_assets
+        mv "$ARCHIVE_NAME" "release_assets/"
+        echo "🎁 Linux release archive prepared successfully"
+
+    - name: Prepare Windows Release
+      if: inputs.build_windows
+      id: prepare_windows
+      shell: bash
+      run: |
+        echo "📦 Preparing Windows release..."
+        
+        # Create staging directory
+        STAGING_DIR="staging_windows"
+        mkdir -p "$STAGING_DIR"
+        
+        # Copy binary
+        if [ -f "target/x86_64-pc-windows-msvc/release/${{ inputs.pkg_name }}.exe" ]; then
+          cp "target/x86_64-pc-windows-msvc/release/${{ inputs.pkg_name }}.exe" "$STAGING_DIR/"
+          echo "✅ Added Windows binary"
+        else
+          echo "❌ Windows binary not found"
+          exit 1
+        fi
+        
+        # Copy additional Windows files
+        if [ -n "${{ inputs.windows_files }}" ] && [ "${{ inputs.windows_files }}" != "[]" ]; then
+          echo "📎 Adding Windows-specific files..."
+          FILES=$(echo '${{ inputs.windows_files }}' | jq -r '.[]')
+          for file in $FILES; do
+            if [ -f "$file" ]; then
+              cp "$file" "$STAGING_DIR/"
+              echo "✅ Added file: $file"
+            else
+              echo "⚠️ File not found: $file"
+            fi
+          done
+        fi
+        
+        # Create zip archive
+        ARCHIVE_NAME="${{ inputs.pkg_name }}-${{ steps.get_version.outputs.version }}-windows-x86_64.zip"
+        cd "$STAGING_DIR"
+        zip -r "../$ARCHIVE_NAME" .
+        cd ..
+        
+        # Calculate SHA256
+        SHA256=$(sha256sum "$ARCHIVE_NAME" | cut -d ' ' -f 1)
+        
+        # Set outputs
+        echo "ARCHIVE_PATH=$ARCHIVE_NAME" >> $GITHUB_OUTPUT
+        echo "SHA256=$SHA256" >> $GITHUB_OUTPUT
+        
+        # Move to release assets directory
+        mkdir -p release_assets
+        mv "$ARCHIVE_NAME" "release_assets/"
+        echo "🎁 Windows release archive prepared successfully"
+
+    - name: Add Additional Release Files
+      if: inputs.release_files != '[]'
+      shell: bash
+      run: |
+        echo "📎 Adding additional release files..."
+        mkdir -p release_assets
+        FILES=$(echo '${{ inputs.release_files }}' | jq -r '.[]')
+        for file in $FILES; do
+          if [ -f "$file" ]; then
+            cp "$file" "release_assets/"
+            echo "✅ Added file: $file"
+          else
+            echo "⚠️ File not found: $file"
+          fi
+        done
+
+    - name: Check Existing Release
+      id: check_release
+      shell: bash
+      run: |
+        VERSION="${{ steps.get_version.outputs.version }}"
+        echo "🔍 Checking for existing release: $VERSION"
+        
+        # Try to get the release information
+        RELEASE_INFO=$(curl -s -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
+          "https://api.github.com/repos/${{ github.repository }}/releases/tags/$VERSION")
+        
+        if [[ $(echo "$RELEASE_INFO" | jq -r '.id // empty') ]]; then
+          echo "✅ Found existing release"
+          echo "has_release=true" >> $GITHUB_OUTPUT
+          echo "release_id=$(echo "$RELEASE_INFO" | jq -r '.id')" >> $GITHUB_OUTPUT
+          echo "upload_url=$(echo "$RELEASE_INFO" | jq -r '.upload_url')" >> $GITHUB_OUTPUT
+        else
+          echo "📝 No existing release found, will create new one"
+          echo "has_release=false" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create Release
+      if: steps.check_release.outputs.has_release != 'true'
+      id: create_release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.get_version.outputs.version }}
+        name: Release ${{ steps.get_version.outputs.version }}
+        draft: false
+        prerelease: false
+        files: release_assets/*
+        fail_on_unmatched_files: false
+      env:
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+
+    - name: Upload Release Assets
+      if: steps.check_release.outputs.has_release == 'true'
+      shell: bash
+      run: |
+        echo "📤 Uploading assets to existing release..."
+        VERSION="${{ steps.get_version.outputs.version }}"
+        
+        for asset in release_assets/*; do
+          echo "Uploading: $asset"
+          curl -s -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
+               -H "Content-Type: application/octet-stream" \
+               --data-binary "@$asset" \
+               "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.check_release.outputs.release_id }}/assets?name=$(basename $asset)"
+          echo "✅ Uploaded: $asset"
+        done
+
+    - name: Prepare PKGBUILD for AUR
+      if: inputs.prepare_aur && inputs.build_linux
+      id: pkgbuild
+      shell: bash
+      run: |
+        echo "🔄 Preparing PKGBUILD for AUR deployment..."
+        
+        # Extract version without 'v' prefix if present
+        VERSION="${{ steps.get_version.outputs.version }}"
+        VERSION_NO_V="${VERSION#v}"  # Remove 'v' prefix if present
+        
+        echo "📝 Using version: $VERSION_NO_V-${{ inputs.rel }}"
+        
+        # Create output directory
+        mkdir -p "$(dirname "${{ inputs.pkgbuild_output_path }}")"
+        
+        # Check if a custom PKGBUILD path is provided
+        if [ -n "${{ inputs.pkgbuild }}" ] && [ -f "${{ inputs.pkgbuild }}" ]; then
+          echo "✅ Using provided PKGBUILD from ${{ inputs.pkgbuild }}"
+          cp "${{ inputs.pkgbuild }}" "${{ inputs.pkgbuild_output_path }}"
+        else
+          echo "⚠️ No valid PKGBUILD path provided. Cannot prepare for AUR deployment."
+          exit 1
+        fi
+        
+        # Update version and release in PKGBUILD
+        sed -i "s/pkgver=.*/pkgver=$VERSION_NO_V/" "${{ inputs.pkgbuild_output_path }}"
+        sed -i "s/pkgrel=.*/pkgrel=${{ inputs.rel }}/" "${{ inputs.pkgbuild_output_path }}"
+        
+        # Use the Linux archive for AUR
+        ARCHIVE_NAME="${{ steps.prepare_linux.outputs.ARCHIVE_PATH }}"
+        download_url="https://github.com/${{ github.repository }}/releases/download/$VERSION/$ARCHIVE_NAME"
+        
+        # Update source and sha256sums in PKGBUILD
+        sed -i "s|source=.*|source=(\"$download_url\")|" "${{ inputs.pkgbuild_output_path }}"
+        sed -i "s|sha256sums=.*|sha256sums=('${{ steps.prepare_linux.outputs.SHA256 }}')|" "${{ inputs.pkgbuild_output_path }}"
+        
+        echo "📝 PKGBUILD prepared successfully at ${{ inputs.pkgbuild_output_path }}"
+        echo "Content of PKGBUILD:"
+        cat "${{ inputs.pkgbuild_output_path }}"
+        
+        echo "📋 Next steps:"
+        echo "  1. Use KSXGitHub/github-actions-deploy-aur@v4.1.1 to deploy to AUR"
+        echo "  2. Pass the prepared PKGBUILD at ${{ inputs.pkgbuild_output_path }}"
+        echo "  3. Example:"
+        echo "     - name: Deploy to AUR"
+        echo "       uses: KSXGitHub/github-actions-deploy-aur@v4.1.1"
+        echo "       with:"
+        echo "         pkgname: ${{ inputs.pkg_name }}"
+        echo "         pkgbuild: ${{ inputs.pkgbuild_output_path }}"
+        echo "         commit_username: \${{ secrets.AUR_USERNAME }}"
+        echo "         commit_email: \${{ secrets.AUR_EMAIL }}"
+        echo "         ssh_private_key: \${{ secrets.AUR_SSH_PRIVATE_KEY }}"
+        echo "         commit_message: \"Update to version ${{ steps.get_version.outputs.version }}\""
+        echo "         ssh_keyscan_types: rsa,ecdsa,ed25519" 

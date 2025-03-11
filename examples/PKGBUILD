@@ -1,0 +1,26 @@
+# Maintainer: Your Name <your.email@example.com>
+
+# This PKGBUILD is not a full PKGBUILD
+# pkgver, source, and sha256sums are to be generated
+
+pkgname=your-package-name
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Your package description"
+arch=('x86_64' 'aarch64')
+url="https://github.com/yourusername/your-repo"
+license=('MIT')
+depends=()
+makedepends=()
+source=("$pkgname-$pkgver.tar.gz::https://github.com/yourusername/your-repo/releases/download/v${pkgver}/test-linux-x64.tar.gz")
+sha256sums=('SKIP')  # Replace SKIP with actual checksum when available
+
+package() {
+  cd "$srcdir"
+  install -Dm755 "../$pkgname-linux-$CARCH" "$pkgdir/usr/bin/$pkgname"
+  
+  # Install license if available
+  if [ -f "$srcdir/your-repo-$pkgver/LICENSE" ]; then
+    install -Dm644 "$srcdir/your-repo-$pkgver/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  fi
+}
