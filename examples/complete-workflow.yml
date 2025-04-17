@@ -22,6 +22,11 @@ on:
         required: false
         default: 'true'
         type: boolean
+      git_deploy:
+        description: 'Whether this is a -git deployment'
+        required: false
+        default: 'false'
+        type: boolean
 
 jobs:
   release_and_deploy:
@@ -43,6 +48,7 @@ jobs:
           pkg_name: my-rust-app
           version: ${{ github.event.inputs.version }}
           rel: ${{ github.event.inputs.rel || '1' }}
+          git_deploy: ${{ github.event.inputs.git_deploy || false }}
           
           # Build configuration
           build_linux: ${{ github.event.inputs.build_linux || true }}

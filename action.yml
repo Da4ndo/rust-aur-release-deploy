@@ -51,6 +51,11 @@ inputs:
     description: 'Path where the prepared PKGBUILD file should be saved'
     required: false
     default: './prepared_pkgbuild/PKGBUILD'
+  git_deploy:
+    description: 'Whether this is a -git deployment (skips release creation)'
+    required: false
+    default: false
+    type: boolean
 
 outputs:
   version:
@@ -240,6 +245,7 @@ runs:
         done
 
     - name: Check Existing Release
+      if: !inputs.git_deploy
       id: check_release
       shell: bash
       run: |
@@ -261,7 +267,7 @@ runs:
         fi
 
     - name: Create Release
-      if: steps.check_release.outputs.has_release != 'true'
+      if: !steps.check_release.outputs.has_release && !inputs.git_deploy
       id: create_release
       uses: softprops/action-gh-release@v2
       with:
@@ -271,11 +277,12 @@ runs:
         prerelease: false
         files: release_assets/*
         fail_on_unmatched_files: false
+        generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
     - name: Upload Release Assets
-      if: steps.check_release.outputs.has_release == 'true'
+      if: steps.check_release.outputs.has_release && !inputs.git_deploy
       shell: bash
       run: |
         echo "📤 Uploading assets to existing release..."

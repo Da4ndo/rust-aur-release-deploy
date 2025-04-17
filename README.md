@@ -1,3 +1,6 @@
+//TODO add changelog to release
+//TODO -git deployment
+
 # 🚀 Rust AUR Release Deploy
 
 <div align="center">
@@ -118,6 +121,7 @@ All without any additional configuration!
 | `prepare_aur` | Whether to prepare PKGBUILD for AUR deployment | No | true |
 | `pkgbuild` | Path to the PKGBUILD file to use for AUR deployment | No | '' |
 | `pkgbuild_output_path` | Path where the prepared PKGBUILD file should be saved | No | './prepared_pkgbuild/PKGBUILD' |
+| `git_deploy` | Whether this is a -git deployment (skips release creation) | No | false |
 
 ## 📤 Outputs
 
