@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Released]
 
+## [2.0.0] - 2025-04-17
+
+### Added
+- `git_deploy` input parameter to handle -git deployments
+- Automatic release notes generation using GitHub's built-in generator
+- Support for skipping release creation for -git deployments
+
+### Changed
+- Improved boolean handling in workflow conditions
+- Updated workflow examples to include git_deploy configuration
+- Enhanced documentation for git deployment scenarios
+
 ## [1.0.0] - 2025-03-05
 
 ### Added
@@ -48,5 +60,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Combined file list in favor of platform-specific lists
 - `create_release` parameter (now handled automatically)
 
-[Unreleased]: https://github.com/Da4ndo/rust-aur-release-deploy/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Da4ndo/rust-aur-release-deploy/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/Da4ndo/rust-aur-release-deploy/releases/tag/v2.0.0
 [1.0.0]: https://github.com/Da4ndo/rust-aur-release-deploy/releases/tag/v1.0.0
