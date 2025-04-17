@@ -1,6 +1,3 @@
-//TODO add changelog to release
-//TODO -git deployment
-
 # 🚀 Rust AUR Release Deploy
 
 <div align="center">
