@@ -84,6 +84,15 @@ outputs:
 runs:
   using: 'composite'
   steps:
+    - name: Debug Info
+      shell: bash
+      run: |
+        echo "🔍 Debug Information:"
+        echo "is_git_package: ${{ inputs.is_git_package }}"
+        echo "platform: ${{ inputs.platform }}"
+        echo "auto_release: ${{ inputs.auto_release }}"
+        echo "prepare_aur: ${{ inputs.prepare_aur }}"
+
     - name: Checkout code
       uses: actions/checkout@v4
       with:
@@ -109,7 +118,7 @@ runs:
         fi
 
     - name: Set up Rust
-      if: ${{ !inputs.is_git_package && (inputs.platform == 'linux' || inputs.platform == 'both') }}
+      if: ${{ !inputs.is_git_package && contains(fromJSON('["linux", "both"]'), inputs.platform) }}
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
@@ -117,21 +126,21 @@ runs:
         override: true
 
     - name: Build for Linux (x86_64)
-      if: ${{ !inputs.is_git_package && (inputs.platform == 'linux' || inputs.platform == 'both') }}
+      if: ${{ !inputs.is_git_package && contains(fromJSON('["linux", "both"]'), inputs.platform) }}
       uses: actions-rs/cargo@v1
       with:
         command: build
         args: --release --target x86_64-unknown-linux-gnu
 
     - name: Build for Windows (x86_64)
-      if: ${{ !inputs.is_git_package && (inputs.platform == 'windows' || inputs.platform == 'both') }}
+      if: ${{ !inputs.is_git_package && contains(fromJSON('["windows", "both"]'), inputs.platform) }}
       uses: actions-rs/cargo@v1
       with:
         command: build
         args: --release --target x86_64-pc-windows-msvc
 
     - name: Prepare Linux Release
-      if: ${{ !inputs.is_git_package && (inputs.platform == 'linux' || inputs.platform == 'both') }}
+      if: ${{ !inputs.is_git_package && contains(fromJSON('["linux", "both"]'), inputs.platform) }}
       id: prepare_linux
       shell: bash
       run: |
@@ -181,7 +190,7 @@ runs:
         echo "🎁 Linux release archive prepared successfully"
 
     - name: Prepare Windows Release
-      if: ${{ !inputs.is_git_package && (inputs.platform == 'windows' || inputs.platform == 'both') }}
+      if: ${{ !inputs.is_git_package && contains(fromJSON('["windows", "both"]'), inputs.platform) }}
       id: prepare_windows
       shell: bash
       run: |
@@ -337,6 +346,10 @@ runs:
         else
           # Use the Linux archive for AUR
           ARCHIVE_NAME="${{ steps.prepare_linux.outputs.ARCHIVE_PATH }}"
+          if [ -z "$ARCHIVE_NAME" ]; then
+            echo "❌ Linux archive not found. Cannot update PKGBUILD."
+            exit 1
+          fi
           download_url="https://github.com/${{ github.repository }}/releases/download/$VERSION/$ARCHIVE_NAME"
           
           # Update source and sha256sums in PKGBUILD
@@ -348,6 +361,7 @@ runs:
         echo "Content of PKGBUILD:"
         cat "${{ inputs.pkgbuild_output_path }}"
         
+        echo ""
         echo "📋 Next steps:"
         echo "  1. Use KSXGitHub/github-actions-deploy-aur@v4.1.1 to deploy to AUR"
         echo "  2. Pass the prepared PKGBUILD at ${{ inputs.pkgbuild_output_path }}"
