@@ -1,4 +1,4 @@
-name: Basic Release and Deploy
+name: Basic Usage Example
 
 on:
   release:
@@ -22,23 +22,25 @@ jobs:
 
       - name: Build and Prepare Release
         id: release
-        uses: Da4ndo/rust-aur-release-deploy@v1
+        uses: Da4ndo/rust-aur-release-deploy@v2
         with:
-          pkg_name: my-rust-app
+          package_name: your-package-name
           version: ${{ github.event.inputs.version }}
           rel: ${{ github.event.inputs.rel || '1' }}
-          build_linux: true  # Build for Linux (required for AUR)
-          linux_files: '["LICENSE", "README.md"]'  # Files to include in Linux package
-          pkgbuild: './PKGBUILD'  # Path to your PKGBUILD template
+          platform: linux
+          pkgbuild: './PKGBUILD'
+          auto_release: true
+          generate_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Deploy to AUR
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
         with:
-          pkgname: my-rust-app
+          pkgname: your-package-name
           pkgbuild: ${{ steps.release.outputs.pkgbuild_path }}
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "Update to version ${{ steps.release.outputs.version }}" 
+          commit_message: "Update to version ${{ steps.release.outputs.version }}"
+          ssh_keyscan_types: rsa,ecdsa,ed25519 

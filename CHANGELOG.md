@@ -5,7 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Released]
+## [2.1.0] - 2025-04-18
+
+### Added
+- Platform parameter to control build targets (linux, windows, or both)
+- Improved git package support with automatic version extraction
+- Auto-release and release notes generation controls
+- Test job integration in git workflow example
+- Enhanced documentation for git packages
+- Improved error handling and logging
+
+### Changed
+- Renamed parameters for better clarity:
+  - `pkg_name` → `package_name`
+  - `build_linux` and `build_windows` → `platform`
+  - `git_deploy` → `is_git_package`
+- Updated workflow examples to use release events
+- Improved PKGBUILD handling for git packages
+- Enhanced version extraction from Cargo.toml
+- Made release number optional in workflow_dispatch
+- Simplified platform selection with single parameter
+
+### Fixed
+- Git package version handling with proper metadata
+- Conditional build steps based on package type
+- Release asset handling for existing releases
+- PKGBUILD source URL formatting
+- Documentation consistency across examples
 
 ## [2.0.0] - 2025-04-17
 
@@ -60,6 +86,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Combined file list in favor of platform-specific lists
 - `create_release` parameter (now handled automatically)
 
-[Unreleased]: https://github.com/Da4ndo/rust-aur-release-deploy/compare/v2.0.0...HEAD
-[2.0.0]: https://github.com/Da4ndo/rust-aur-release-deploy/releases/tag/v2.0.0
-[1.0.0]: https://github.com/Da4ndo/rust-aur-release-deploy/releases/tag/v1.0.0
+[Unreleased]: https://github.com/Da4ndo/rust-aur-release-deploy/compare/v2...HEAD
+[2.1.0]: https://github.com/Da4ndo/rust-aur-release-deploy/releases/tag/v2
+[1.0.0]: https://github.com/Da4ndo/rust-aur-release-deploy/releases/tag/v1

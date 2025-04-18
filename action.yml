@@ -9,19 +9,13 @@ inputs:
   version:
     description: 'Version to deploy (e.g. v1.0.0). If not provided, uses the latest release tag.'
     required: false
-  pkg_name:
+  package_name:
     description: 'Name of your package'
     required: true
-  build_linux:
-    description: 'Whether to build for Linux'
+  platform:
+    description: 'Platforms to build for (linux, windows, or both)'
     required: false
-    default: true
-    type: boolean
-  build_windows:
-    description: 'Whether to build for Windows'
-    required: false
-    default: false
-    type: boolean
+    default: 'linux'
   linux_files:
     description: 'List of additional files to include in the Linux tar.gz archive (JSON array)'
     required: false
@@ -51,10 +45,20 @@ inputs:
     description: 'Path where the prepared PKGBUILD file should be saved'
     required: false
     default: './prepared_pkgbuild/PKGBUILD'
-  git_deploy:
-    description: 'Whether this is a -git deployment (skips release creation)'
+  is_git_package:
+    description: 'Whether this is a -git deployment (skips build, release creation, and file preparation)'
     required: false
     default: false
+    type: boolean
+  auto_release:
+    description: 'Whether to automatically create/update GitHub release (ignored if is_git_package is true)'
+    required: false
+    default: true
+    type: boolean
+  generate_notes:
+    description: 'Whether to generate release notes automatically (ignored if is_git_package is true)'
+    required: false
+    default: true
     type: boolean
 
 outputs:
@@ -105,7 +109,7 @@ runs:
         fi
 
     - name: Set up Rust
-      if: inputs.build_linux || inputs.build_windows
+      if: ${{ !inputs.is_git_package && (inputs.platform == 'linux' || inputs.platform == 'both') }}
       uses: actions-rs/toolchain@v1
       with:
         profile: minimal
@@ -113,21 +117,21 @@ runs:
         override: true
 
     - name: Build for Linux (x86_64)
-      if: inputs.build_linux
+      if: ${{ !inputs.is_git_package && (inputs.platform == 'linux' || inputs.platform == 'both') }}
       uses: actions-rs/cargo@v1
       with:
         command: build
         args: --release --target x86_64-unknown-linux-gnu
 
     - name: Build for Windows (x86_64)
-      if: inputs.build_windows
+      if: ${{ !inputs.is_git_package && (inputs.platform == 'windows' || inputs.platform == 'both') }}
       uses: actions-rs/cargo@v1
       with:
         command: build
         args: --release --target x86_64-pc-windows-msvc
 
     - name: Prepare Linux Release
-      if: inputs.build_linux
+      if: ${{ !inputs.is_git_package && (inputs.platform == 'linux' || inputs.platform == 'both') }}
       id: prepare_linux
       shell: bash
       run: |
@@ -138,8 +142,8 @@ runs:
         mkdir -p "$STAGING_DIR"
         
         # Copy binary
-        if [ -f "target/x86_64-unknown-linux-gnu/release/${{ inputs.pkg_name }}" ]; then
-          cp "target/x86_64-unknown-linux-gnu/release/${{ inputs.pkg_name }}" "$STAGING_DIR/"
+        if [ -f "target/x86_64-unknown-linux-gnu/release/${{ inputs.package_name }}" ]; then
+          cp "target/x86_64-unknown-linux-gnu/release/${{ inputs.package_name }}" "$STAGING_DIR/"
           echo "✅ Added Linux binary"
         else
           echo "❌ Linux binary not found"
@@ -161,7 +165,7 @@ runs:
         fi
         
         # Create tar.gz archive
-        ARCHIVE_NAME="${{ inputs.pkg_name }}-${{ steps.get_version.outputs.version }}-linux-x86_64.tar.gz"
+        ARCHIVE_NAME="${{ inputs.package_name }}-${{ steps.get_version.outputs.version }}-linux-x86_64.tar.gz"
         tar -czf "$ARCHIVE_NAME" -C "$STAGING_DIR" .
         
         # Calculate SHA256
@@ -177,7 +181,7 @@ runs:
         echo "🎁 Linux release archive prepared successfully"
 
     - name: Prepare Windows Release
-      if: inputs.build_windows
+      if: ${{ !inputs.is_git_package && (inputs.platform == 'windows' || inputs.platform == 'both') }}
       id: prepare_windows
       shell: bash
       run: |
@@ -188,8 +192,8 @@ runs:
         mkdir -p "$STAGING_DIR"
         
         # Copy binary
-        if [ -f "target/x86_64-pc-windows-msvc/release/${{ inputs.pkg_name }}.exe" ]; then
-          cp "target/x86_64-pc-windows-msvc/release/${{ inputs.pkg_name }}.exe" "$STAGING_DIR/"
+        if [ -f "target/x86_64-pc-windows-msvc/release/${{ inputs.package_name }}.exe" ]; then
+          cp "target/x86_64-pc-windows-msvc/release/${{ inputs.package_name }}.exe" "$STAGING_DIR/"
           echo "✅ Added Windows binary"
         else
           echo "❌ Windows binary not found"
@@ -211,7 +215,7 @@ runs:
         fi
         
         # Create zip archive
-        ARCHIVE_NAME="${{ inputs.pkg_name }}-${{ steps.get_version.outputs.version }}-windows-x86_64.zip"
+        ARCHIVE_NAME="${{ inputs.package_name }}-${{ steps.get_version.outputs.version }}-windows-x86_64.zip"
         cd "$STAGING_DIR"
         zip -r "../$ARCHIVE_NAME" .
         cd ..
@@ -229,7 +233,7 @@ runs:
         echo "🎁 Windows release archive prepared successfully"
 
     - name: Add Additional Release Files
-      if: inputs.release_files != '[]'
+      if: ${{ !inputs.is_git_package && inputs.release_files != '[]' }}
       shell: bash
       run: |
         echo "📎 Adding additional release files..."
@@ -245,7 +249,7 @@ runs:
         done
 
     - name: Check Existing Release
-      if: !inputs.git_deploy
+      if: ${{ !inputs.is_git_package && inputs.auto_release }}
       id: check_release
       shell: bash
       run: |
@@ -267,7 +271,7 @@ runs:
         fi
 
     - name: Create Release
-      if: !steps.check_release.outputs.has_release && !inputs.git_deploy
+      if: ${{ !inputs.is_git_package && inputs.auto_release && !steps.check_release.outputs.has_release }}
       id: create_release
       uses: softprops/action-gh-release@v2
       with:
@@ -277,12 +281,12 @@ runs:
         prerelease: false
         files: release_assets/*
         fail_on_unmatched_files: false
-        generate_release_notes: true
+        generate_release_notes: ${{ inputs.generate_notes }}
       env:
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
     - name: Upload Release Assets
-      if: steps.check_release.outputs.has_release && !inputs.git_deploy
+      if: ${{ !inputs.is_git_package && inputs.auto_release && steps.check_release.outputs.has_release }}
       shell: bash
       run: |
         echo "📤 Uploading assets to existing release..."
@@ -298,7 +302,7 @@ runs:
         done
 
     - name: Prepare PKGBUILD for AUR
-      if: inputs.prepare_aur && inputs.build_linux
+      if: ${{ inputs.prepare_aur }}
       id: pkgbuild
       shell: bash
       run: |
@@ -326,13 +330,19 @@ runs:
         sed -i "s/pkgver=.*/pkgver=$VERSION_NO_V/" "${{ inputs.pkgbuild_output_path }}"
         sed -i "s/pkgrel=.*/pkgrel=${{ inputs.rel }}/" "${{ inputs.pkgbuild_output_path }}"
         
-        # Use the Linux archive for AUR
-        ARCHIVE_NAME="${{ steps.prepare_linux.outputs.ARCHIVE_PATH }}"
-        download_url="https://github.com/${{ github.repository }}/releases/download/$VERSION/$ARCHIVE_NAME"
-        
-        # Update source and sha256sums in PKGBUILD
-        sed -i "s|source=.*|source=(\"$download_url\")|" "${{ inputs.pkgbuild_output_path }}"
-        sed -i "s|sha256sums=.*|sha256sums=('${{ steps.prepare_linux.outputs.SHA256 }}')|" "${{ inputs.pkgbuild_output_path }}"
+        if [ "${{ inputs.is_git_package }}" = "true" ]; then
+          # For git packages, we don't need source or sha256sums
+          sed -i "s|source=.*|source=(\"git+https://github.com/${{ github.repository }}.git#tag=\${pkgver}\")|" "${{ inputs.pkgbuild_output_path }}"
+          sed -i "s|sha256sums=.*|sha256sums=('SKIP')|" "${{ inputs.pkgbuild_output_path }}"
+        else
+          # Use the Linux archive for AUR
+          ARCHIVE_NAME="${{ steps.prepare_linux.outputs.ARCHIVE_PATH }}"
+          download_url="https://github.com/${{ github.repository }}/releases/download/$VERSION/$ARCHIVE_NAME"
+          
+          # Update source and sha256sums in PKGBUILD
+          sed -i "s|source=.*|source=(\"$download_url\")|" "${{ inputs.pkgbuild_output_path }}"
+          sed -i "s|sha256sums=.*|sha256sums=('${{ steps.prepare_linux.outputs.SHA256 }}')|" "${{ inputs.pkgbuild_output_path }}"
+        fi
         
         echo "📝 PKGBUILD prepared successfully at ${{ inputs.pkgbuild_output_path }}"
         echo "Content of PKGBUILD:"
@@ -345,7 +355,7 @@ runs:
         echo "     - name: Deploy to AUR"
         echo "       uses: KSXGitHub/github-actions-deploy-aur@v4.1.1"
         echo "       with:"
-        echo "         pkgname: ${{ inputs.pkg_name }}"
+        echo "         pkgname: ${{ inputs.package_name }}"
         echo "         pkgbuild: ${{ inputs.pkgbuild_output_path }}"
         echo "         commit_username: \${{ secrets.AUR_USERNAME }}"
         echo "         commit_email: \${{ secrets.AUR_EMAIL }}"

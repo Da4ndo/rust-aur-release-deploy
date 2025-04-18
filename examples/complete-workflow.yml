@@ -12,21 +12,6 @@ on:
         description: 'Release number (e.g. 1)'
         required: false
         default: '1'
-      build_linux:
-        description: 'Build for Linux'
-        required: false
-        default: 'true'
-        type: boolean
-      build_windows:
-        description: 'Build for Windows'
-        required: false
-        default: 'true'
-        type: boolean
-      git_deploy:
-        description: 'Whether this is a -git deployment'
-        required: false
-        default: 'false'
-        type: boolean
 
 jobs:
   release_and_deploy:
@@ -43,45 +28,31 @@ jobs:
 
       - name: Build and Prepare Release
         id: release
-        uses: Da4ndo/rust-aur-release-deploy@v1
+        uses: Da4ndo/rust-aur-release-deploy@v2
         with:
-          pkg_name: my-rust-app
+          # Required parameters
+          package_name: your-package-name
+          
+          # Version control
           version: ${{ github.event.inputs.version }}
           rel: ${{ github.event.inputs.rel || '1' }}
-          git_deploy: ${{ github.event.inputs.git_deploy || false }}
           
           # Build configuration
-          build_linux: ${{ github.event.inputs.build_linux || true }}
-          build_windows: ${{ github.event.inputs.build_windows || true }}
+          platform: both  # 'linux', 'windows', or 'both'
           
-          # Platform-specific files
-          linux_files: |
-            [
-              "LICENSE",
-              "README.md",
-              "config/linux.toml",
-              "assets/linux/*"
-            ]
-          windows_files: |
-            [
-              "LICENSE",
-              "README.md",
-              "config/windows.toml",
-              "assets/windows/*"
-            ]
-          
-          # Additional release files (not included in platform packages)
-          release_files: |
-            [
-              "CHANGELOG.md",
-              "docs/*",
-              "examples/*"
-            ]
+          # Additional files to include
+          linux_files: '["LICENSE", "README.md", "config.toml"]'
+          windows_files: '["LICENSE", "README.md", "config.win.toml"]'
+          release_files: '["CHANGELOG.md", "docs/*"]'
           
           # AUR configuration
           prepare_aur: true
           pkgbuild: './PKGBUILD'
           pkgbuild_output_path: './prepared_pkgbuild/PKGBUILD'
+          
+          # Release configuration
+          auto_release: true
+          generate_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -101,12 +72,10 @@ jobs:
             echo "- SHA256: ${{ steps.release.outputs.windows_sha256 }}" >> release_notes.md
           fi
 
-      # Deploy to AUR if Linux build is enabled
       - name: Deploy to AUR
-        if: github.event.inputs.build_linux != 'false'
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
         with:
-          pkgname: my-rust-app
+          pkgname: your-package-name
           pkgbuild: ${{ steps.release.outputs.pkgbuild_path }}
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
@@ -121,13 +90,13 @@ jobs:
           echo "## Installation" > INSTALL.md
           echo "### From AUR (Arch Linux)" >> INSTALL.md
           echo "\`\`\`bash" >> INSTALL.md
-          echo "yay -S my-rust-app" >> INSTALL.md
+          echo "yay -S your-package-name" >> INSTALL.md
           echo "\`\`\`" >> INSTALL.md
           echo "### Manual Installation" >> INSTALL.md
           echo "Download the appropriate package for your system:" >> INSTALL.md
           if [[ -n "${{ steps.release.outputs.linux_archive }}" ]]; then
-            echo "- Linux: [my-rust-app-${{ steps.release.outputs.version }}-linux-x86_64.tar.gz](${{ steps.release.outputs.linux_archive }})" >> INSTALL.md
+            echo "- Linux: [your-package-name-${{ steps.release.outputs.version }}-linux-x86_64.tar.gz](${{ steps.release.outputs.linux_archive }})" >> INSTALL.md
           fi
           if [[ -n "${{ steps.release.outputs.windows_archive }}" ]]; then
-            echo "- Windows: [my-rust-app-${{ steps.release.outputs.version }}-windows-x86_64.zip](${{ steps.release.outputs.windows_archive }})" >> INSTALL.md
+            echo "- Windows: [your-package-name-${{ steps.release.outputs.version }}-windows-x86_64.zip](${{ steps.release.outputs.windows_archive }})" >> INSTALL.md
           fi 

@@ -26,13 +26,15 @@
 - 🏗️ **Prepare packages for AUR deployment** automatically
 - 🔄 **Modular workflow design** for flexible deployment options
 - 🛠️ **Customizable build and packaging options** for each platform
+- 🌱 **Git package support** - easily deploy -git packages to AUR
+- 🔧 **Flexible versioning** with automatic tag detection
 
 ## 🚀 Usage
 
 ### Basic Example
 
 ```yaml
-name: Release and Deploy
+name: Basic Usage Example
 
 on:
   release:
@@ -44,7 +46,7 @@ on:
         required: false
       rel:
         description: 'Release number (e.g. 1)'
-        required: true
+        required: false
         default: '1'
 
 jobs:
@@ -56,17 +58,15 @@ jobs:
 
       - name: Build and Prepare Release
         id: release
-        uses: Da4ndo/rust-aur-release-deploy@v1
+        uses: Da4ndo/rust-aur-release-deploy@v2
         with:
-          pkg_name: your-package-name
-          version: ${{ github.event.inputs.version }}  # If not provided, uses latest tag
+          package_name: your-package-name
+          version: ${{ github.event.inputs.version }}
           rel: ${{ github.event.inputs.rel || '1' }}
-          build_linux: true
-          build_windows: true
-          linux_files: '["LICENSE", "config.toml"]'
-          windows_files: '["LICENSE", "config.win.toml"]'
-          release_files: '["README.md"]'
+          platform: linux
           pkgbuild: './PKGBUILD'
+          auto_release: true
+          generate_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -82,35 +82,115 @@ jobs:
           ssh_keyscan_types: rsa,ecdsa,ed25519
 ```
 
-> 💡 **Note:** For more complex examples, check out the [examples directory](./examples/).
+### Git Package Example
+
+For -git packages that track the main branch:
+
+```yaml
+name: Git Package Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+        
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          
+  release_and_deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version info
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(grep -m 1 '^version = ' Cargo.toml | cut -d '"' -f 2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "commit_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "commit_count=$(git rev-list --count HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build and Prepare Release
+        id: release
+        uses: Da4ndo/rust-aur-release-deploy@v2
+        with:
+          package_name: your-package-name-git
+          version: ${{ steps.version.outputs.version }}.r${{ steps.version.outputs.commit_count }}.g${{ steps.version.outputs.commit_short }}
+          rel: 1
+          platform: linux
+          linux_files: '["LICENSE", "README.md"]'
+          pkgbuild: './PKGBUILD-git'
+          is_git_package: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: your-package-name-git
+          pkgbuild: ${{ steps.release.outputs.pkgbuild_path }}
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ steps.version.outputs.version }}.r${{ steps.version.outputs.commit_count }}.g${{ steps.version.outputs.commit_short }}"
+          ssh_keyscan_types: rsa,ecdsa,ed25519
+```
+
+> 💡 **Note:** For more examples, check out the [examples directory](./examples/).
 
 ### Release Handling
 
 The action intelligently handles GitHub releases:
 
-1. If a `version` is provided:
-   - If a release with that version tag exists, it will upload assets to it
-   - If no release exists, it will create a new one
+1. When triggered by a release event:
+   - Uses the release version and assets
+   - Updates or creates AUR package accordingly
 
-2. If no `version` is provided:
-   - Uses the latest git tag as the version
-   - If no tags exist, the action will fail with a clear error message
-   - Follows the same logic as above for existing/new releases
+2. When triggered by workflow_dispatch:
+   - Uses the provided version if specified
+   - Creates or updates the release as needed
+   - Deploys to AUR with the specified version
 
-This means you can:
-- Create new releases with new versions
-- Add additional assets to existing releases
-- Use the latest tag automatically
-All without any additional configuration!
+3. For git packages:
+   - Uses version from Cargo.toml with git metadata
+   - Skips release creation
+   - Updates AUR -git package with latest commit
+
+This flexibility allows you to:
+- Automate releases with GitHub's release system
+- Manually trigger releases with custom versions
+- Maintain -git packages that track your main branch
+All with proper versioning and minimal configuration!
 
 ## 📋 Inputs
 
 | Name | Description | Required | Default |
 |------|-------------|----------|---------|
 | `version` | Version to deploy (e.g., v1.0.0). If not provided, uses the latest release tag. | No | Latest release tag |
-| `pkg_name` | Name of your package | Yes | N/A |
-| `build_linux` | Whether to build for Linux | No | true |
-| `build_windows` | Whether to build for Windows | No | false |
+| `package_name` | Name of your package | Yes | N/A |
+| `platform` | Platforms to build for (linux, windows, or both) | No | 'linux' |
 | `linux_files` | List of additional files to include in the Linux tar.gz archive (JSON array) | No | '[]' |
 | `windows_files` | List of additional files to include in the Windows release (JSON array) | No | '[]' |
 | `release_files` | List of additional files to include in the GitHub release but not in platform archives (JSON array) | No | '[]' |
@@ -118,7 +198,9 @@ All without any additional configuration!
 | `prepare_aur` | Whether to prepare PKGBUILD for AUR deployment | No | true |
 | `pkgbuild` | Path to the PKGBUILD file to use for AUR deployment | No | '' |
 | `pkgbuild_output_path` | Path where the prepared PKGBUILD file should be saved | No | './prepared_pkgbuild/PKGBUILD' |
-| `git_deploy` | Whether this is a -git deployment (skips release creation) | No | false |
+| `is_git_package` | Whether this is a -git deployment | No | false |
+| `auto_release` | Whether to automatically create/update GitHub release | No | true |
+| `generate_notes` | Whether to generate release notes automatically | No | true |
 
 ## 📤 Outputs
 

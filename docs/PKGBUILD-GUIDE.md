@@ -1,8 +1,10 @@
 # 📦 PKGBUILD Guide
 
-This guide explains how to create and customize your PKGBUILD file for use with the Rust AUR Release Deploy action.
+This guide explains how to create and customize your PKGBUILD files for use with the Rust AUR Release Deploy action.
 
-## 📝 Basic PKGBUILD Template
+## 📝 Templates
+
+### Regular Package Template
 
 ```bash
 # Maintainer: Your Name <your.email@example.com>
@@ -15,7 +17,7 @@ url="https://github.com/yourusername/your-repo"
 license=('MIT')
 depends=()
 makedepends=()
-source=("https://github.com/yourusername/your-repo/releases/download/v$pkgver/$pkgname-v$pkgver-linux-x86_64.tar.gz")
+source=("$pkgname-$pkgver-linux-x86_64.tar.gz::https://github.com/yourusername/your-repo/releases/download/v$pkgver/$pkgname-v$pkgver-linux-x86_64.tar.gz")
 sha256sums=('SKIP')  # Will be automatically updated by the action
 
 package() {
@@ -40,11 +42,54 @@ package() {
 }
 ```
 
+### Git Package Template
+
+```bash
+# Maintainer: Your Name <your.email@example.com>
+pkgname=your-package-name-git
+pkgver=0.1.0.r123.gabc1234
+pkgrel=1
+pkgdesc="Description of your package (Git version)"
+arch=('x86_64')
+url="https://github.com/yourusername/your-repo"
+license=('MIT')
+depends=()
+makedepends=('git' 'rust' 'cargo')
+provides=('your-package-name')
+conflicts=('your-package-name')
+source=("git+https://github.com/yourusername/your-repo.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "$srcdir/${pkgname%-git}"
+    printf "%s.r%s.g%s" \
+        "$(grep -m 1 '^version = ' Cargo.toml | cut -d '"' -f 2)" \
+        "$(git rev-list --count HEAD)" \
+        "$(git rev-parse --short HEAD)"
+}
+
+build() {
+    cd "$srcdir/${pkgname%-git}"
+    cargo build --release --locked
+}
+
+package() {
+    cd "$srcdir/${pkgname%-git}"
+    
+    # Install binary
+    install -Dm755 "target/release/${pkgname%-git}" "$pkgdir/usr/bin/${pkgname%-git}"
+    
+    # Install documentation
+    install -Dm644 "README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
+```
+
 ## 🔧 Customization
 
 ### Package Information
 
-- `pkgname`: Must match the name specified in your workflow
+- `pkgname`: Must match the name specified in your workflow (`package_name`)
 - `pkgver`: Will be automatically updated by the action
 - `pkgrel`: Will be automatically updated by the action
 - `pkgdesc`: Add a clear description of your package
@@ -64,10 +109,12 @@ depends=(
 )
 ```
 
-Add build dependencies to `makedepends` if needed (though not typically necessary as the binary is pre-built):
+For git packages, add build dependencies to `makedepends`:
 
 ```bash
 makedepends=(
+    'git'
+    'rust'
     'cargo'
     # Add other build dependencies
 )
@@ -75,11 +122,18 @@ makedepends=(
 
 ### Source and SHA256
 
-The action will automatically update these fields:
+For regular packages, the action will automatically update these fields:
 
 ```bash
-source=("https://github.com/yourusername/your-repo/releases/download/v$pkgver/$pkgname-v$pkgver-linux-x86_64.tar.gz")
+source=("$pkgname-$pkgver-linux-x86_64.tar.gz::https://github.com/yourusername/your-repo/releases/download/v$pkgver/$pkgname-v$pkgver-linux-x86_64.tar.gz")
 sha256sums=('SKIP')  # Will be updated with actual SHA256
+```
+
+For git packages:
+
+```bash
+source=("git+https://github.com/yourusername/your-repo.git")
+sha256sums=('SKIP')
 ```
 
 ### Package Function
@@ -108,8 +162,8 @@ package() {
     fi
     
     # Configuration
-    if [ -f "config/linux.toml" ]; then
-        install -Dm644 "config/linux.toml" "$pkgdir/etc/$pkgname/config.toml"
+    if [ -f "config.toml" ]; then
+        install -Dm644 "config.toml" "$pkgdir/etc/$pkgname/config.toml"
     fi
     
     # Assets
@@ -121,24 +175,19 @@ package() {
 
 ## 🚀 Usage with the Action
 
-1. Save your PKGBUILD template in your repository (e.g., `./PKGBUILD`)
-
-2. In your workflow, specify the path to your PKGBUILD:
+### Regular Package
 
 ```yaml
 - name: Build and Prepare Release
   id: release
-  uses: Da4ndo/rust-aur-release-deploy@v1
+  uses: Da4ndo/rust-aur-release-deploy@v2
   with:
-    pkg_name: your-package-name
+    package_name: your-package-name
+    version: ${{ github.event.inputs.version }}
+    rel: ${{ github.event.inputs.rel || '1' }}
+    platform: linux
+    linux_files: '["LICENSE", "README.md", "config.toml"]'
     pkgbuild: './PKGBUILD'
-    linux_files: |
-      [
-        "LICENSE",
-        "README.md",
-        "config/linux.toml",
-        "assets/*"
-      ]
 
 - name: Deploy to AUR
   uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
@@ -150,10 +199,44 @@ package() {
     ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
 ```
 
+### Git Package
+
+```yaml
+- name: Get version info
+  id: version
+  shell: bash
+  run: |
+    VERSION=$(grep -m 1 '^version = ' Cargo.toml | cut -d '"' -f 2)
+    echo "version=$VERSION" >> $GITHUB_OUTPUT
+    echo "commit_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+    echo "commit_count=$(git rev-list --count HEAD)" >> $GITHUB_OUTPUT
+
+- name: Build and Prepare Release
+  id: release
+  uses: Da4ndo/rust-aur-release-deploy@v2
+  with:
+    package_name: your-package-name-git
+    version: ${{ steps.version.outputs.version }}.r${{ steps.version.outputs.commit_count }}.g${{ steps.version.outputs.commit_short }}
+    rel: 1
+    platform: linux
+    linux_files: '["LICENSE", "README.md"]'
+    pkgbuild: './PKGBUILD-git'
+    is_git_package: true
+
+- name: Deploy to AUR
+  uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+  with:
+    pkgname: your-package-name-git
+    pkgbuild: ${{ steps.release.outputs.pkgbuild_path }}
+    commit_username: ${{ secrets.AUR_USERNAME }}
+    commit_email: ${{ secrets.AUR_EMAIL }}
+    ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+```
+
 ## 📋 Best Practices
 
 1. **File Organization**
-   - Keep your PKGBUILD template in version control
+   - Keep separate PKGBUILD templates for regular and git packages
    - Use consistent paths in your repository
    - Document any special file requirements
 
@@ -187,4 +270,9 @@ package() {
 3. **Dependency Issues**
    - Verify all dependencies are correctly listed
    - Test with minimal dependencies first
-   - Consider using `namcap` to check the package 
+   - Consider using `namcap` to check the package
+
+4. **Git Package Issues**
+   - Ensure `pkgver()` function is properly defined
+   - Check that all build dependencies are listed
+   - Verify the git source URL is correct 

@@ -1,0 +1,69 @@
+name: Git Package Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+        
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          
+  release_and_deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version info
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(grep -m 1 '^version = ' Cargo.toml | cut -d '"' -f 2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "commit_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "commit_count=$(git rev-list --count HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build and Prepare Release
+        id: release
+        uses: Da4ndo/rust-aur-release-deploy@v2
+        with:
+          package_name: your-package-name-git
+          version: ${{ steps.version.outputs.version }}.r${{ steps.version.outputs.commit_count }}.g${{ steps.version.outputs.commit_short }}
+          rel: 1
+          platform: linux
+          linux_files: '["LICENSE", "README.md"]'
+          pkgbuild: './PKGBUILD-git'
+          is_git_package: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.1
+        with:
+          pkgname: your-package-name-git
+          pkgbuild: ${{ steps.release.outputs.pkgbuild_path }}
+          commit_username: ${{ secrets.AUR_USERNAME }}
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          commit_message: "Update to ${{ steps.version.outputs.version }}.r${{ steps.version.outputs.commit_count }}.g${{ steps.version.outputs.commit_short }}"
+          ssh_keyscan_types: rsa,ecdsa,ed25519
