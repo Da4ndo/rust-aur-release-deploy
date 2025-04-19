@@ -234,7 +234,7 @@ runs:
         echo "🎁 Windows release archive prepared successfully"
 
     - name: Add Additional Release Files
-      if: ${{ !inputs.is_git_package && inputs.release_files != '[]' }}
+      if: ${{ inputs.is_git_package != 'true' && inputs.release_files != '[]' }}
       shell: bash
       run: |
         echo "📎 Adding additional release files..."
@@ -250,7 +250,7 @@ runs:
         done
 
     - name: Check Existing Release
-      if: ${{ !inputs.is_git_package && inputs.auto_release }}
+      if: ${{ inputs.is_git_package != 'true' && inputs.auto_release }}
       id: check_release
       shell: bash
       run: |
@@ -272,7 +272,7 @@ runs:
         fi
 
     - name: Create Release
-      if: ${{ !inputs.is_git_package && inputs.auto_release && !steps.check_release.outputs.has_release }}
+      if: ${{ inputs.is_git_package != 'true' && inputs.auto_release && !steps.check_release.outputs.has_release }}
       id: create_release
       uses: softprops/action-gh-release@v2
       with:
@@ -287,7 +287,7 @@ runs:
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
     - name: Upload Release Assets
-      if: ${{ !inputs.is_git_package && inputs.auto_release && steps.check_release.outputs.has_release }}
+      if: ${{ inputs.is_git_package != 'true' && inputs.auto_release && steps.check_release.outputs.has_release }}
       shell: bash
       run: |
         echo "📤 Uploading assets to existing release..."
