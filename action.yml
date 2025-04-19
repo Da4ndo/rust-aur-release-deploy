@@ -272,7 +272,7 @@ runs:
         fi
 
     - name: Create Release
-      if: ${{ inputs.is_git_package != 'true' && inputs.auto_release && !steps.check_release.outputs.has_release }}
+      if: ${{ inputs.is_git_package != 'true' && inputs.auto_release && steps.check_release.outputs.has_release != 'true' }}
       id: create_release
       uses: softprops/action-gh-release@v2
       with:
@@ -287,18 +287,34 @@ runs:
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
     - name: Upload Release Assets
-      if: ${{ inputs.is_git_package != 'true' && inputs.auto_release && steps.check_release.outputs.has_release }}
+      if: ${{ inputs.is_git_package != 'true' && inputs.auto_release && (steps.check_release.outputs.has_release || steps.create_release.outcome == 'success') }}
       shell: bash
       run: |
-        echo "📤 Uploading assets to existing release..."
+        echo "📤 Uploading assets to release..."
         VERSION="${{ steps.get_version.outputs.version }}"
+        
+        # Get release ID either from existing release or newly created one
+        RELEASE_ID=""
+        if [[ "${{ steps.check_release.outputs.has_release }}" == "true" ]]; then
+          RELEASE_ID="${{ steps.check_release.outputs.release_id }}"
+        else
+          # Get the release ID from the newly created release
+          RELEASE_INFO=$(curl -s -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$VERSION")
+          RELEASE_ID=$(echo "$RELEASE_INFO" | jq -r '.id')
+        fi
+        
+        if [[ -z "$RELEASE_ID" ]]; then
+          echo "❌ Failed to get release ID"
+          exit 1
+        fi
         
         for asset in release_assets/*; do
           echo "Uploading: $asset"
           curl -s -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
                -H "Content-Type: application/octet-stream" \
                --data-binary "@$asset" \
-               "https://uploads.github.com/repos/${{ github.repository }}/releases/${{ steps.check_release.outputs.release_id }}/assets?name=$(basename $asset)"
+               "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=$(basename $asset)"
           echo "✅ Uploaded: $asset"
         done
 
