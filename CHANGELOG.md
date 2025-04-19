@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2025-04-19
+
+### Changed
+- Improved error handling for Linux binary builds
+
+### Fixed
+- Fixed conditional logic for platform-specific builds to properly evaluate boolean expressions
+- Improved build failure handling to exit early when required binaries cannot be built
+- Fixed release tag comparison logic to ensure proper version control
+
 ## [2.1.0] - 2025-04-18
 
 ### Added
@@ -87,5 +97,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `create_release` parameter (now handled automatically)
 
 [Unreleased]: https://github.com/Da4ndo/rust-aur-release-deploy/compare/v2...HEAD
-[2.1.0]: https://github.com/Da4ndo/rust-aur-release-deploy/releases/tag/v2
+[2.2.0]: https://github.com/Da4ndo/rust-aur-release-deploy/releases/tag/v2
 [1.0.0]: https://github.com/Da4ndo/rust-aur-release-deploy/releases/tag/v1

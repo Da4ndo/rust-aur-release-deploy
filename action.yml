@@ -84,20 +84,6 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Debug Info
-      shell: bash
-      run: |
-        echo "🔍 Debug Information:"
-        echo "is_git_package: '${{ inputs.is_git_package }}'"
-        echo "platform: '${{ inputs.platform }}'"
-        echo "auto_release: '${{ inputs.auto_release }}'"
-        echo "prepare_aur: '${{ inputs.prepare_aur }}'"
-        echo ""
-        echo "🔍 Condition Evaluation:"
-        echo "!inputs.is_git_package = '${{ inputs.is_git_package != 'true' }}'"
-        echo "platform check = '${{ contains(fromJSON('["linux", "both"]'), inputs.platform) }}'"
-        echo "Full linux condition = '${{ inputs.is_git_package != 'true' && contains(fromJSON('["linux", "both"]'), inputs.platform) }}'"
-
     - name: Checkout code
       uses: actions/checkout@v4
       with:
@@ -161,9 +147,8 @@ runs:
           cp "target/x86_64-unknown-linux-gnu/release/${{ inputs.package_name }}" "$STAGING_DIR/"
           echo "✅ Added Linux binary"
         else
-          echo "❌ Linux binary not found, creating empty binary for testing"
-          touch "$STAGING_DIR/${{ inputs.package_name }}"
-          echo "⚠️ Created empty binary for testing purposes"
+          echo "❌ Linux binary not found"
+          exit 1
         fi
         
         # Copy additional Linux files
