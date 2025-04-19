@@ -12,6 +12,11 @@ on:
         description: 'Release number (e.g. 1)'
         required: false
         default: '1'
+      prerelease:
+        description: 'Mark as prerelease'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   release_and_deploy:
@@ -30,7 +35,7 @@ jobs:
           platform: linux
           pkgbuild: './PKGBUILD'
           auto_release: true
-          generate_notes: true
+          prerelease: ${{ github.event.inputs.prerelease }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

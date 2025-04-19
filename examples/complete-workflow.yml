@@ -12,6 +12,11 @@ on:
         description: 'Release number (e.g. 1)'
         required: false
         default: '1'
+      prerelease:
+        description: 'Mark as prerelease'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   release_and_deploy:
@@ -36,6 +41,7 @@ jobs:
           # Version control
           version: ${{ github.event.inputs.version }}
           rel: ${{ github.event.inputs.rel || '1' }}
+          prerelease: ${{ github.event.inputs.prerelease }}
           
           # Build configuration
           platform: both  # 'linux', 'windows', or 'both'
@@ -52,7 +58,6 @@ jobs:
           
           # Release configuration
           auto_release: true
-          generate_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -147,7 +147,7 @@ A comprehensive workflow that demonstrates all features:
 
 - Cross-platform builds (Linux and Windows)
 - Additional file handling
-- Release notes generation
+- Support for prereleases
 - Documentation updates
 - Proper error handling
 

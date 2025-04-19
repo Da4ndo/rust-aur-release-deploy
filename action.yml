@@ -50,16 +50,21 @@ inputs:
     required: false
     default: false
     type: boolean
+  prerelease:
+    description: 'Whether to mark the release as a prerelease'
+    required: false
+    default: false
+    type: boolean
   auto_release:
     description: 'Whether to automatically create/update GitHub release (ignored if is_git_package is true)'
     required: false
     default: true
     type: boolean
-  generate_notes:
-    description: 'Whether to generate release notes automatically (ignored if is_git_package is true)'
-    required: false
-    default: true
-    type: boolean
+
+# TODO release settings, description, remove notes input, fix replace of file on existing release
+# Uploading: release_assets/hyprproxlock-0.1.0-linux-x86_64.tar.gz
+# {"message":"Validation Failed","request_id":"3400:1F85C4:138E7F4:18F4DA9:6803F07E","documentation_url":"https://docs.github.com/rest","errors":[{"resource":"ReleaseAsset","code":"already_exists","field":"name"}]}
+# TODO maybe seperate to multiple jobs , to only re-run failed works
 
 outputs:
   version:
@@ -279,10 +284,10 @@ runs:
         tag_name: ${{ steps.get_version.outputs.version }}
         name: Release ${{ steps.get_version.outputs.version }}
         draft: false
-        prerelease: false
+        prerelease: ${{ inputs.prerelease }}
         files: release_assets/*
         fail_on_unmatched_files: false
-        generate_release_notes: ${{ inputs.generate_notes }}
+        generate_release_notes: true
       env:
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
@@ -310,12 +315,27 @@ runs:
         fi
         
         for asset in release_assets/*; do
-          echo "Uploading: $asset"
+          ASSET_NAME=$(basename "$asset")
+          echo "Processing: $ASSET_NAME"
+          
+          # Get existing assets for this release
+          ASSETS=$(curl -s -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets")
+          
+          # Check if asset already exists and delete it
+          ASSET_ID=$(echo "$ASSETS" | jq -r ".[] | select(.name == \"$ASSET_NAME\") | .id")
+          if [[ -n "$ASSET_ID" ]]; then
+            echo "🗑️ Deleting existing asset: $ASSET_NAME"
+            curl -s -X DELETE -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/assets/$ASSET_ID"
+          fi
+          
+          echo "📤 Uploading: $ASSET_NAME"
           curl -s -H "Authorization: token ${{ env.GITHUB_TOKEN }}" \
                -H "Content-Type: application/octet-stream" \
                --data-binary "@$asset" \
-               "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=$(basename $asset)"
-          echo "✅ Uploaded: $asset"
+               "https://uploads.github.com/repos/${{ github.repository }}/releases/$RELEASE_ID/assets?name=$ASSET_NAME"
+          echo "✅ Uploaded: $ASSET_NAME"
         done
 
     - name: Prepare PKGBUILD for AUR
