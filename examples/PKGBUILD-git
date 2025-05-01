@@ -9,7 +9,7 @@ license=('MIT')
 depends=()
 makedepends=('git' 'rust' 'cargo')
 provides=('your-package-name')
-conflicts=('your-package-name')
+conflicts=('your-package-name' 'your-package-name-debug')
 source=("git+https://github.com/your-username/your-repo.git")
 sha256sums=('SKIP')
 

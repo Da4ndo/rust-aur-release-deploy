@@ -12,6 +12,7 @@ url="https://github.com/yourusername/your-repo"
 license=('MIT')
 depends=()
 makedepends=()
+conflicts=("your-package-name-git" "your-package-name-git-debug")
 source=("$pkgname-$pkgver.tar.gz::https://github.com/yourusername/your-repo/releases/download/v${pkgver}/test-linux-x64.tar.gz")
 sha256sums=('SKIP')  # Replace SKIP with actual checksum when available
 
