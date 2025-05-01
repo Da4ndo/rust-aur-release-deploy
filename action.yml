@@ -368,8 +368,17 @@ runs:
         sed -i "s/pkgrel=.*/pkgrel=${{ inputs.rel }}/" "${{ inputs.pkgbuild_output_path }}"
         
         if [ "${{ inputs.is_git_package }}" = "true" ]; then
-          # For git packages, we don't need source or sha256sums
-          sed -i "s|source=.*|source=(\"git+https://github.com/${{ github.repository }}.git#tag=\${pkgver}\")|" "${{ inputs.pkgbuild_output_path }}"
+          # For git packages, use commit hash if available in version (expected format: X.Y.Z.rN.gCOMMITHASH)
+          COMMIT_HASH=""
+          if [[ "$VERSION_NO_V" =~ \.g([a-f0-9]+)$ ]]; then
+            COMMIT_HASH="${BASH_REMATCH[1]}"
+            echo "✅ Extracted commit hash: $COMMIT_HASH"
+            # Use specific commit hash in source URL
+            sed -i "s|source=.*|source=(\"git+https://github.com/${{ github.repository }}.git#commit=$COMMIT_HASH\")|" "${{ inputs.pkgbuild_output_path }}"
+          else
+            echo "⚠️ No commit hash found in version, using latest commit"
+            sed -i "s|source=.*|source=(\"git+https://github.com/${{ github.repository }}.git\")|" "${{ inputs.pkgbuild_output_path }}"
+          fi
           sed -i "s|sha256sums=.*|sha256sums=('SKIP')|" "${{ inputs.pkgbuild_output_path }}"
         else
           # Use the Linux archive for AUR

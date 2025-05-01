@@ -26,7 +26,7 @@
 - 🏗️ **Prepare packages for AUR deployment** automatically
 - 🔄 **Modular workflow design** for flexible deployment options
 - 🛠️ **Customizable build and packaging options** for each platform
-- 🌱 **Git package support** - easily deploy -git packages to AUR
+- 🌱 **Git package support** - easily deploy -git packages to AUR with specific commit pinning
 - 🔧 **Flexible versioning** with automatic tag detection
 
 ## 🚀 Usage
@@ -137,6 +137,7 @@ jobs:
         uses: Da4ndo/rust-aur-release-deploy@v2
         with:
           package_name: your-package-name-git
+          # The commit hash part is extracted and used to pin the specific commit in the source URL
           version: ${{ steps.version.outputs.version }}.r${{ steps.version.outputs.commit_count }}.g${{ steps.version.outputs.commit_short }}
           rel: 1
           platform: linux
