@@ -2,8 +2,8 @@ name: 'Rust AUR Release Deploy'
 description: 'GitHub Action for building Rust applications, creating GitHub releases, and preparing PKGBUILD for AUR deployment'
 author: 'Da4ndo'
 branding:
-  icon: 'package'
-  color: 'orange'
+  icon: 'arrow-up-circle'
+  color: 'green'
 
 inputs:
   version:
